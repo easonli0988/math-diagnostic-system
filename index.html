@@ -9,6 +9,7 @@
         body { background-color: #f8f9fa; font-family: 'Microsoft JhengHei', sans-serif; }
         .card { border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .btn-custom { border-radius: 25px; padding: 10px 25px; font-weight: bold; }
+        .knowledge-badge { font-size: 0.9rem; margin-right: 5px; }
     </style>
 </head>
 <body>
@@ -43,7 +44,10 @@
     <div id="report-card" class="card p-4 d-none">
         <h3 class="fw-bold text-center text-primary mb-3">知識圖譜診斷報告</h3>
         <hr>
-        <h5 class="fw-bold text-dark mb-3">本輪作答明細與知識點分析：</h5>
+        
+        <div id="summary-container" class="mb-4"></div>
+
+        <h5 class="fw-bold text-dark mb-3">完整作答歷程明細：</h5>
         <div id="item-breakdown-container" class="mb-4"></div>
 
         <div id="prereq-action-area" class="text-center p-4 bg-light border border-warning rounded d-none">
@@ -59,7 +63,6 @@
 </div>
 
 <script>
-    // 已精準帶入你最新的 GAS 網址：
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxg2OE8ifXCWNrC4I4NHqL9a2ep051xFF1ExGvtz2wj83GY-O9K0m83j2Xq-OaY2mhq/exec";
 
     let allDbQuestions = [];
@@ -69,7 +72,7 @@
     let activeChains = {};
     let currentPrereqQueue = [];
 
-    // 開始主測驗（讀取 6 年級題目）
+    // 開始主測驗
     async function startMainExam() {
         document.getElementById("start-card").classList.add("d-none");
         document.getElementById("exam-card").classList.remove("d-none");
@@ -83,11 +86,10 @@
                 return;
             }
 
-            // 篩選出 6 年級主測驗題目
             currentQuestions = allDbQuestions.filter(q => String(q.年級).trim() === "6");
             
             if (currentQuestions.length === 0) {
-                alert("未在『題目庫』工作表中找到年級為 6 的題目，請檢查試算表『年級』欄位！");
+                alert("未在『題目庫』中找到 6 年級題目，請檢查試算表欄位！");
                 return;
             }
 
@@ -101,7 +103,7 @@
             
             renderQuestion();
         } catch (error) {
-            alert("載入題目失敗！請檢查 Apps Script 是否已部署為『所有人』皆可存取。");
+            alert("載入題目失敗！請確認 GAS 部署權限。");
             console.error(error);
         }
     }
@@ -151,7 +153,7 @@
         }
     }
 
-    // 處理交卷結果與判定階段 2 追溯題目
+    // 處理結果與判定
     function processRoundResults() {
         currentPrereqQueue = [];
         
@@ -164,7 +166,6 @@
                 let chain = activeChains[chainKey];
                 chain.history.push({ q: q, isCorrect: isCorrect });
                 
-                // 若答錯，檢查是否有前置追溯題目 ID
                 if (!isCorrect) {
                     const nextPrereqId = q.前置追溯題目ID;
                     if (nextPrereqId && String(nextPrereqId).trim() !== "無" && String(nextPrereqId).trim() !== "") {
@@ -181,33 +182,74 @@
         renderDiagnosisReport();
     }
 
-    // 渲染診斷報告與階段 2 按鈕
+    // 渲染強化版診斷報告
     function renderDiagnosisReport() {
         document.getElementById("exam-card").classList.add("d-none");
         document.getElementById("report-card").classList.remove("d-none");
         
-        const container = document.getElementById("item-breakdown-container");
-        container.innerHTML = "";
+        const summaryContainer = document.getElementById("summary-container");
+        const breakdownContainer = document.getElementById("item-breakdown-container");
+        summaryContainer.innerHTML = "";
+        breakdownContainer.innerHTML = "";
 
+        let weakConcepts = [];
+
+        // 整理每個知識鏈的診斷總結
         Object.keys(activeChains).forEach(chainKey => {
             const chain = activeChains[chainKey];
-            const lastLog = chain.history[chain.history.length - 1];
-            
-            const cardDiv = document.createElement("div");
-            cardDiv.className = "card mb-3 p-3 border";
-            const badgeClass = lastLog.isCorrect ? "bg-success" : "bg-danger";
-            const statusText = lastLog.isCorrect ? "答對" : "答錯";
-            
-            cardDiv.innerHTML = `
-                <div class="d-flex justify-content-between align-items-center">
-                    <span class="fw-bold">[${lastLog.q.年級}年級] ${lastLog.q.核心知識點}</span>
-                    <span class="badge ${badgeClass}">${statusText}</span>
-                </div>
-                <div class="text-muted small mt-1">題目：${lastLog.q.題目內容}</div>
-            `;
-            container.appendChild(cardDiv);
+            const wrongLogs = chain.history.filter(h => !h.isCorrect);
+
+            if (wrongLogs.length > 0) {
+                const mainConcept = chain.mainQ.核心知識點;
+                const wrongGrades = wrongLogs.map(l => `${l.q.年級}年級`).join('與 ');
+                weakConcepts.push({
+                    concept: mainConcept,
+                    details: `在【${mainConcept}】單元中，${wrongGrades}的概念題目均出現答錯狀況，建議針對此觀念進行複習。`
+                });
+            }
         });
 
+        // 呈現知識卡點總覽
+        if (weakConcepts.length > 0) {
+            let summaryHTML = `<div class="alert alert-danger shadow-sm">
+                <h5 class="fw-bold alert-heading">⚠️ 經系統分析，發現以下知識點需加強：</h5><hr>`;
+            weakConcepts.forEach(item => {
+                summaryHTML += `<p class="mb-2"><strong>• ${item.concept}：</strong>${item.details}</p>`;
+            });
+            summaryHTML += `</div>`;
+            summaryContainer.innerHTML = summaryHTML;
+        } else {
+            summaryContainer.innerHTML = `<div class="alert alert-success shadow-sm text-center">
+                <h5 class="fw-bold mb-0">🎉 太棒了！您的核心觀念非常紮實，完全沒有發現明顯的知識卡點！</h5>
+            </div>`;
+        }
+
+        // 呈現作答歷程明細
+        Object.keys(activeChains).forEach(chainKey => {
+            const chain = activeChains[chainKey];
+            
+            chain.history.forEach(log => {
+                const cardDiv = document.createElement("div");
+                cardDiv.className = "card mb-2 p-3 border-start border-4 " + (log.isCorrect ? "border-success" : "border-danger");
+                const badgeClass = log.isCorrect ? "bg-success" : "bg-danger";
+                const statusText = log.isCorrect ? "答對" : "答錯";
+                
+                cardDiv.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="badge bg-secondary knowledge-badge">${log.q.年級}年級</span>
+                            <span class="fw-bold text-dark">${log.q.核心知識點}</span>
+                            <span class="text-muted small">【${log.q.題目ID}】</span>
+                        </div>
+                        <span class="badge ${badgeClass} fs-6">${statusText}</span>
+                    </div>
+                    <div class="text-secondary small mt-2">題目：${log.q.題目內容}</div>
+                `;
+                breakdownContainer.appendChild(cardDiv);
+            });
+        });
+
+        // 判斷是否顯示階段二按鈕
         const actionArea = document.getElementById("prereq-action-area");
         if (currentPrereqQueue.length > 0) {
             actionArea.classList.remove("d-none");
@@ -218,7 +260,7 @@
         }
     }
 
-    // 觸發階段 2（進入追溯測驗）
+    // 觸發階段 2
     function startPrereqRound() {
         currentQuestions = [...currentPrereqQueue];
         currentIndex = 0;
