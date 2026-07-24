@@ -59,8 +59,8 @@
 </div>
 
 <script>
-    // ⚠️ 請確認替換為你的 Google Apps Script Web App 網址 ⚠️
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbx_WWE_sHFKETLpfoWNgOzXxnQgxk_j1wt/exec";
+    // 已自動帶入你的正確 GAS Web App API 網址
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbx_wWE_sHFKETLpfoWNg0zXxnQgxk_joBRbC913UD6eorjtHbJFxtx1NGJr9LPsj1wt/exec";
 
     let allDbQuestions = [];
     let currentQuestions = [];
@@ -69,7 +69,7 @@
     let activeChains = {};
     let currentPrereqQueue = [];
 
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbx_wWE_sHFKETLpfoWNg0zXxnQgxk_joBRbC913UD6eorjtHbJFxtx1NGJr9LPsj1wt/exec";
+    // 開始主測驗
     async function startMainExam() {
         document.getElementById("start-card").classList.add("d-none");
         document.getElementById("exam-card").classList.remove("d-none");
@@ -78,6 +78,7 @@
             const response = await fetch(GAS_API_URL);
             allDbQuestions = await response.json();
             
+            // 抓取 6 年級核心觀念題
             currentQuestions = allDbQuestions.filter(q => q.年級 == 6 || q.年級 == "6");
             currentIndex = 0;
             userAnswers = {};
@@ -154,8 +155,8 @@
                 
                 if (!isCorrect) {
                     const nextPrereqId = q.前置追溯題目ID;
-                    if (nextPrereqId && nextPrereqId !== "無" && nextPrereqId.trim() !== "") {
-                        const nextQ = allDbQuestions.find(item => item.題目ID === nextPrereqId.trim());
+                    if (nextPrereqId && nextPrereqId !== "無" && String(nextPrereqId).trim() !== "") {
+                        const nextQ = allDbQuestions.find(item => String(item.題目ID).trim() === String(nextPrereqId).trim());
                         if (nextQ) {
                             chain.lastTestedQ = nextQ;
                             currentPrereqQueue.push(nextQ);
