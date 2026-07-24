@@ -48,7 +48,7 @@
 
         <div id="prereq-action-area" class="text-center p-4 bg-light border border-warning rounded d-none">
             <h5 class="fw-bold text-dark mb-2">發現尚需進一步確認的知識卡點</h5>
-            <p class="text-muted mb-3" id="prereq-explanation-text">點擊下方按鈕開始進行下一階段的 5 年級前置觀念追溯測驗。</p>
+            <p class="text-muted mb-3" id="prereq-explanation-text">點擊下方按鈕開始進行下一階段的前置觀念追溯測驗。</p>
             <button class="btn btn-warning btn-lg btn-custom text-white fw-bold" onclick="startPrereqRound()">進入階段 2：前置觀念追溯測驗</button>
         </div>
 
@@ -59,8 +59,8 @@
 </div>
 
 <script>
-    // 已自動帶入你的正確 GAS Web App API 網址
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbx70yCPHaUPiaGSa1bmlVtaLq3987_Zsu95WBqP4xq6LJiDJzMU4s0Zga78-MH_L8ts/exec";
+    // 已精準帶入你最新的 GAS 網址：
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxg2OE8ifXCWNrC4I4NHqL9a2ep051xFF1ExGvtz2wj83GY-O9K0m83j2Xq-OaY2mhq/exec";
 
     let allDbQuestions = [];
     let currentQuestions = [];
@@ -69,7 +69,7 @@
     let activeChains = {};
     let currentPrereqQueue = [];
 
-    // 開始主測驗
+    // 開始主測驗（讀取 6 年級題目）
     async function startMainExam() {
         document.getElementById("start-card").classList.add("d-none");
         document.getElementById("exam-card").classList.remove("d-none");
@@ -78,8 +78,19 @@
             const response = await fetch(GAS_API_URL);
             allDbQuestions = await response.json();
             
-            // 抓取 6 年級核心觀念題
-            currentQuestions = allDbQuestions.filter(q => q.年級 == 6 || q.年級 == "6");
+            if (allDbQuestions.error) {
+                alert("試算表讀取錯誤：" + allDbQuestions.error);
+                return;
+            }
+
+            // 篩選出 6 年級主測驗題目
+            currentQuestions = allDbQuestions.filter(q => String(q.年級).trim() === "6");
+            
+            if (currentQuestions.length === 0) {
+                alert("未在『題目庫』工作表中找到年級為 6 的題目，請檢查試算表『年級』欄位！");
+                return;
+            }
+
             currentIndex = 0;
             userAnswers = {};
             activeChains = {};
@@ -90,7 +101,7 @@
             
             renderQuestion();
         } catch (error) {
-            alert("載入題目失敗，請檢查 API 網址與網路連線！");
+            alert("載入題目失敗！請檢查 Apps Script 是否已部署為『所有人』皆可存取。");
             console.error(error);
         }
     }
@@ -140,22 +151,23 @@
         }
     }
 
-    // 處理作答結果與階段 2 下探計算
+    // 處理交卷結果與判定階段 2 追溯題目
     function processRoundResults() {
         currentPrereqQueue = [];
         
         currentQuestions.forEach(q => {
             const userAns = userAnswers[q.題目ID];
-            const isCorrect = (userAns === q.正確答案);
+            const isCorrect = (String(userAns).trim().toUpperCase() === String(q.正確答案).trim().toUpperCase());
             
             let chainKey = Object.keys(activeChains).find(k => k === q.題目ID || activeChains[k].lastTestedQ.題目ID === q.題目ID);
             if (chainKey) {
                 let chain = activeChains[chainKey];
                 chain.history.push({ q: q, isCorrect: isCorrect });
                 
+                // 若答錯，檢查是否有前置追溯題目 ID
                 if (!isCorrect) {
                     const nextPrereqId = q.前置追溯題目ID;
-                    if (nextPrereqId && nextPrereqId !== "無" && String(nextPrereqId).trim() !== "") {
+                    if (nextPrereqId && String(nextPrereqId).trim() !== "無" && String(nextPrereqId).trim() !== "") {
                         const nextQ = allDbQuestions.find(item => String(item.題目ID).trim() === String(nextPrereqId).trim());
                         if (nextQ) {
                             chain.lastTestedQ = nextQ;
@@ -169,7 +181,7 @@
         renderDiagnosisReport();
     }
 
-    // 渲染報告與階段 2 觸發按鈕
+    // 渲染診斷報告與階段 2 按鈕
     function renderDiagnosisReport() {
         document.getElementById("exam-card").classList.add("d-none");
         document.getElementById("report-card").classList.remove("d-none");
@@ -200,16 +212,17 @@
         if (currentPrereqQueue.length > 0) {
             actionArea.classList.remove("d-none");
             document.getElementById("prereq-explanation-text").innerText = 
-                `系統檢測到您有 ${currentPrereqQueue.length} 個觀念需要追溯，將會帶您進行相對應的前置觀念測驗。`;
+                `系統檢測到您有 ${currentPrereqQueue.length} 個觀念答錯，點擊下方按鈕開始進行適應性前置觀念追溯測驗。`;
         } else {
             actionArea.classList.add("d-none");
         }
     }
 
-    // 觸發階段 2（進行追溯測驗）
+    // 觸發階段 2（進入追溯測驗）
     function startPrereqRound() {
         currentQuestions = [...currentPrereqQueue];
         currentIndex = 0;
+        userAnswers = {};
         document.getElementById("report-card").classList.add("d-none");
         document.getElementById("exam-card").classList.remove("d-none");
         renderQuestion();
